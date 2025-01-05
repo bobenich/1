@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-web-app
+  labels:
+    app: my-web-app
+spec:
+  replicas: 4  # Начальное количество реплик для обработки пиковой нагрузки
+  selector:
+    matchLabels:
+      app: my-web-app
+  template:
+    metadata:
+      labels:
+        app: my-web-app
+    spec:
+      containers:
+      - name: my-web-app-container
+        image: my-web-app:latest  # Замените на ваш образ
+        ports:
+        - containerPort: 80  # Порт, на котором работает ваше приложение
+        resources:
+          requests:
+            memory: "256Mi"  # Запрашиваемая память при старте (учитываем больше для инициализации)
+            cpu: "0.5"  # Запрашиваемый процессор при старте
+          limits:
+            memory: "512Mi"  # Ограничение по памяти
+            cpu: "1"  # Ограничение по процессору
+        readinessProbe:  # Проверка готовности пода
+          httpGet:
+            path: /healthz  # Путь проверки состояния приложения
+            port: 80
+          initialDelaySeconds: 10  # Задержка перед первой проверкой
+          periodSeconds: 5  # Частота проверок готовности
+        livenessProbe:  # Проверка жизнеспособности
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 30  # Первоначальная задержка
+          periodSeconds: 15  # Частота проверок жизнеспособности
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: my-web-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-web-app
+  minReplicas: 2  # Минимальное количество реплик для снижения потребления ресурсов в ночное время
+  maxReplicas: 6  # Максимальное количество реплик для масштабирования в пиковых нагрузках
+  targetCPUUtilizationPercentage: 75  # Процент загрузки CPU для срабатывания авто-масштабирования
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-web-app-service
+spec:
+  type: NodePort  # Можем использовать NodePort или LoadBalancer в зависимости от нужд
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      nodePort: 30080  # Указать конкретный nodePort, если это требуется
+  selector:
+    app: my-web-app
